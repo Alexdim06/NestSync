@@ -1,8 +1,8 @@
 body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background-color: var(--primary-color);
-  color: var(--text-light);
+  background-color: var(--background);
+  color: var(--text);
 }
 
 .page {
@@ -18,6 +18,6 @@ body {
 
 .page p {
   margin: 0 0 12px;
-  color: var(--muted-gray);
+  color: var(--text);
 }
 

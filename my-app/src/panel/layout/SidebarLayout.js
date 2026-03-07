@@ -4,28 +4,44 @@ import './SidebarLayout.css';
 
 function SidebarLayout({ children }) {
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-logo-container">
-          <img src={logo} alt="logo" className="sidebar-logo" />
-          <p className="logo-text">SyncNest</p>
+    <div className="sidebar-layout">
+      <aside className="sidebar-layout__sidebar">
+        <div className="sidebar-layout__logo-container">
+          <img src={logo} alt="logo" className="sidebar-layout__logo" />
+          <p className="sidebar-layout__logo-text">SyncNest</p>
         </div>
-        <div className="navigation-container">
-          <div className="navigation-title">Navigation</div>
-          <nav className="sidebar-nav">
-            <NavLink to="/" end className="sidebar-link">
+        <div className="sidebar-layout__nav-container">
+          <div className="sidebar-layout__nav-title">Navigation</div>
+          <nav className="sidebar-layout__nav">
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                `sidebar-layout__nav-link${isActive ? ' sidebar-layout__nav-link--active' : ''}`
+              }
+            >
               Начало
             </NavLink>
-            <NavLink to="/calendar" className="sidebar-link">
+            <NavLink
+              to="/calendar"
+              className={({ isActive }) =>
+                `sidebar-layout__nav-link${isActive ? ' sidebar-layout__nav-link--active' : ''}`
+              }
+            >
               Календар
             </NavLink>
-            <NavLink to="/settings" className="sidebar-link">
+            <NavLink
+              to="/settings"
+              className={({ isActive }) =>
+                `sidebar-layout__nav-link${isActive ? ' sidebar-layout__nav-link--active' : ''}`
+              }
+            >
               Настройки
             </NavLink>
           </nav>
         </div>
       </aside>
-      <main className="content">{children}</main>
+      <main className="sidebar-layout__content">{children}</main>
     </div>
   );
 }

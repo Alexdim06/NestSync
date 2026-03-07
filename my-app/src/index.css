@@ -1,8 +1,7 @@
-::root {
-    --primary-color: #121212;
-    --secondary-color: #1e1e1e;
-    --gold-accent: #d4af37;
-    --light-gold-hover: #f4d03f;
-    --muted-gray: #9e9e9e;
-    --text-light: #ffffff;
+:root {
+    --primary: #2ECC71;
+    --primary-hover: #27AE60;
+    --accent: #A3E4D7;
+    --background: #F4FDF7;
+    --text: #1E3D2F;
 }
