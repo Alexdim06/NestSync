@@ -8,6 +8,7 @@ function Login() {
   const { user, login } = useAuth();
   const [tab, setTab] = useState('login');
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [initialCardAmount, setInitialCardAmount] = useState('');
@@ -61,6 +62,7 @@ function Login() {
       const formData = new FormData();
       formData.append('email', email.trim());
       formData.append('password', password);
+      if (username.trim()) formData.append('username', username.trim());
       if (initialCardAmount !== '') formData.append('initialCardAmount', initialCardAmount);
       if (profilePhoto) formData.append('profilePhoto', profilePhoto);
       const { user: userData, token } = await apiRegister(formData);
@@ -103,6 +105,13 @@ function Login() {
         onChange={(e) => setEmail(e.target.value)}
         required
         autoComplete="email"
+      />
+      <input
+        type="text"
+        placeholder="Username"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        autoComplete="username"
       />
       <input
         type="password"

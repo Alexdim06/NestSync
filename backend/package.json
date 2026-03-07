@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "db:init": "node scripts/init-db.js"
+    "db:init": "node scripts/init-db.js",
+    "db:migrate": "node scripts/migrate-username.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

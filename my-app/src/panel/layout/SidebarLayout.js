@@ -6,7 +6,7 @@ import './SidebarLayout.css';
 
 function SidebarLayout({ children }) {
   const { user, logout } = useAuth();
-  const displayName = user?.email?.split('@')[0] || 'User';
+  const displayName = user?.username || user?.email?.split('@')[0] || 'User';
 
   return (
     <div className="sidebar-layout">

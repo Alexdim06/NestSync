@@ -13,6 +13,7 @@ function sanitizeUser(row) {
   return {
     id: row.id,
     email: row.email,
+    username: row.username || null,
     profilePhotoUrl: row.profile_photo_path ? `/uploads/${row.profile_photo_path}` : null,
     initialCardAmount: Number(row.initial_card_amount),
     createdAt: row.created_at,
@@ -23,6 +24,7 @@ function sanitizeUser(row) {
 router.post('/register', upload.single('profilePhoto'), async (req, res) => {
   try {
     const email = (req.body.email || '').trim().toLowerCase();
+    const username = (req.body.username || '').trim() || null;
     const password = req.body.password;
     const initialCardAmount = parseFloat(req.body.initialCardAmount) || 0;
     const profilePhotoPath = req.file ? path.basename(req.file.path) : null;
@@ -36,10 +38,10 @@ router.post('/register', upload.single('profilePhoto'), async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await query(
-      `INSERT INTO users (email, password_hash, profile_photo_path, initial_card_amount)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, email, profile_photo_path, initial_card_amount, created_at`,
-      [email, passwordHash, profilePhotoPath, initialCardAmount]
+      `INSERT INTO users (email, username, password_hash, profile_photo_path, initial_card_amount)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, email, username, profile_photo_path, initial_card_amount, created_at`,
+      [email, username, passwordHash, profilePhotoPath, initialCardAmount]
     );
     const user = sanitizeUser(result.rows[0]);
     const token = jwt.sign(
@@ -68,7 +70,7 @@ router.post('/login', async (req, res) => {
     }
 
     const result = await query(
-      `SELECT id, email, password_hash, profile_photo_path, initial_card_amount, created_at
+      `SELECT id, email, username, password_hash, profile_photo_path, initial_card_amount, created_at
        FROM users WHERE email = $1`,
       [email]
     );
@@ -99,7 +101,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', auth, async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, email, profile_photo_path, initial_card_amount, created_at
+      `SELECT id, email, username, profile_photo_path, initial_card_amount, created_at
        FROM users WHERE id = $1`,
       [req.userId]
     );

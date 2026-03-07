@@ -44,6 +44,11 @@ npm install
 npm run db:init
 ```
 
+Ако таблицата `users` вече съществува и няма колона `username`, пусни миграцията:
+```bash
+npm run db:migrate
+```
+
 ### 4. Пусни сървъра
 
 ```bash
@@ -67,6 +72,7 @@ API-то е на `http://localhost:3001`.
 
 - `email` (required)
 - `password` (required, min 6 символа)
+- `username` (optional)
 - `profilePhoto` (optional) – image file
 - `initialCardAmount` (optional) – число
 
