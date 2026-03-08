@@ -10,5 +10,37 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DATABASE_URL=postgresql://nestsync:nestsync@db:5432/nestsync
+      - JWT_SECRET=dev-secret-change-in-production
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - db
+    command: npm run dev
+
+  frontend:
+    build:
+      context: ../my-app
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../my-app/src:/app/src
+      - ../my-app/public:/app/public
+    environment:
+      - HOST=0.0.0.0
+      - CHOKIDAR_USEPOLLING=true
+    stdin_open: true
+    tty: true
+
 volumes:
   pgdata:

@@ -21,6 +21,8 @@ function isDateKeyFuture(dateKey) {
   return dateKey > todayKey;
 }
 
+const DEFAULT_CATEGORY_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#34495e'];
+
 function SalaryEditIcon({ className }) {
   return (
     <svg className={className} width="24" height="24" viewBox="0 0 21 19" xmlns="http://www.w3.org/2000/svg" style={{ fillRule: 'evenodd', clipRule: 'evenodd', strokeLinejoin: 'round', strokeMiterlimit: 2 }}>
@@ -54,6 +56,12 @@ function Calendar() {
   const [newSavedName, setNewSavedName] = useState('');
   const [newSavedAmount, setNewSavedAmount] = useState('');
   const [newSavedType, setNewSavedType] = useState('remove');
+  const [categories, setCategories] = useState([]);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryColor, setNewCategoryColor] = useState(DEFAULT_CATEGORY_COLORS[0]);
+  const [newCategoryPercent, setNewCategoryPercent] = useState('');
+  const [newSavedCategoryId, setNewSavedCategoryId] = useState('');
+  const [showNewCategoryPopup, setShowNewCategoryPopup] = useState(false);
 
   const key = STORAGE_KEY(user?.id);
   const todayKey = toDateKey(new Date());
@@ -82,6 +90,7 @@ function Calendar() {
         setSalaryPayDay(data.salaryPayDay ?? null);
         setEntries(data.entries ?? {});
         setSavedItems(data.savedItems ?? []);
+        setCategories(data.categories ?? []);
         let last = data.lastSalaryAdd ?? null;
         const payDay = data.salaryPayDay ?? null;
         const salary = data.monthlySalary ?? 0;
@@ -108,6 +117,7 @@ function Calendar() {
               cardBalance: balance,
               lastSalaryAdd: last,
               savedItems: data.savedItems ?? [],
+              categories: data.categories ?? [],
             }));
           } catch (e) {
             console.warn('Calendar save failed', e);
@@ -121,6 +131,7 @@ function Calendar() {
         setSalaryPayDay(null);
         setEntries({});
         setSavedItems([]);
+        setCategories([]);
         setCardBalance(initialBalance);
         setLastSalaryAdd(null);
         setSalaryEditing(true);
@@ -130,6 +141,7 @@ function Calendar() {
       setSalaryPayDay(null);
       setEntries({});
       setSavedItems([]);
+      setCategories([]);
       setCardBalance(initialBalance);
       setSalaryEditing(true);
     }
@@ -163,6 +175,7 @@ function Calendar() {
       lastSalaryAdd,
       entries,
       savedItems,
+      categories,
     });
   };
 
@@ -184,7 +197,9 @@ function Calendar() {
     return list.map((e) => ({ ...e, type: e.type || 'add' }));
   };
 
-  const addEntry = (dateKey, name, amount, type) => {
+  const getCategoryById = (id) => (id ? categories.find((c) => c.id === id) : null);
+
+  const addEntry = (dateKey, name, amount, type, categoryId = null) => {
     const amt = Number(amount) || 0;
     const list = entries[dateKey] ?? [];
     const entry = {
@@ -192,6 +207,7 @@ function Calendar() {
       name: (name || '').trim(),
       amount: amt,
       type: type || 'add',
+      categoryId: categoryId || undefined,
     };
     const next = { ...entries, [dateKey]: [...list, entry] };
     const isFuture = isDateKeyFuture(dateKey);
@@ -205,6 +221,7 @@ function Calendar() {
       lastSalaryAdd,
       entries: next,
       savedItems,
+      categories,
     });
     if (type === 'add') {
       setNewNameAdd('');
@@ -234,6 +251,7 @@ function Calendar() {
       lastSalaryAdd,
       entries: next,
       savedItems,
+      categories,
     });
   };
 
@@ -258,7 +276,7 @@ function Calendar() {
 
   const addSavedToDay = (item) => {
     if (!selectedDateKey) return;
-    addEntry(selectedDateKey, item.name, item.amount, item.type);
+    addEntry(selectedDateKey, item.name, item.amount, item.type, item.categoryId ?? null);
   };
 
   const saveNewSavedItem = (e) => {
@@ -271,11 +289,13 @@ function Calendar() {
       name,
       amount,
       type: newSavedType,
+      categoryId: newSavedCategoryId || undefined,
     };
     const next = [...savedItems, item];
     setSavedItems(next);
     setNewSavedName('');
     setNewSavedAmount('');
+    setNewSavedCategoryId('');
     saveData({
       monthlySalary,
       salaryPayDay,
@@ -283,6 +303,7 @@ function Calendar() {
       lastSalaryAdd,
       entries,
       savedItems: next,
+      categories,
     });
   };
 
@@ -296,6 +317,47 @@ function Calendar() {
       lastSalaryAdd,
       entries,
       savedItems: next,
+      categories,
+    });
+  };
+
+  const addCategory = (e) => {
+    e.preventDefault();
+    const name = (newCategoryName || '').trim();
+    if (!name) return false;
+    const cat = {
+      id: `cat-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      name,
+      color: newCategoryColor,
+    };
+    const next = [...categories, cat];
+    setCategories(next);
+    setNewCategoryName('');
+    setNewCategoryPercent('');
+    setNewCategoryColor(DEFAULT_CATEGORY_COLORS[next.length % DEFAULT_CATEGORY_COLORS.length]);
+    saveData({
+      monthlySalary,
+      salaryPayDay,
+      cardBalance,
+      lastSalaryAdd,
+      entries,
+      savedItems,
+      categories: next,
+    });
+    return true;
+  };
+
+  const removeCategory = (catId) => {
+    const next = categories.filter((c) => c.id !== catId);
+    setCategories(next);
+    saveData({
+      monthlySalary,
+      salaryPayDay,
+      cardBalance,
+      lastSalaryAdd,
+      entries,
+      savedItems,
+      categories: next,
     });
   };
 
@@ -319,6 +381,30 @@ function Calendar() {
     return sum;
   };
   const spentThisMonth = totalSpentThisMonth();
+
+  const spentByCategorySegments = (() => {
+    const buckets = { '': { amount: 0, name: 'Некатегоризирани', color: 'var(--red)' } };
+    categories.forEach((c) => { buckets[c.id] = { amount: 0, name: c.name, color: c.color }; });
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dk = toDateKey(new Date(year, month, day));
+      if (dk > todayKey) continue;
+      const list = entries[dk] ?? [];
+      list.forEach((e) => {
+        if (e.type !== 'remove') return;
+        const id = (e.categoryId && getCategoryById(e.categoryId)) ? e.categoryId : '';
+        if (!buckets[id]) buckets[id] = { amount: 0, name: 'Некатегоризирани', color: 'var(--red)' };
+        buckets[id].amount += e.amount;
+      });
+    }
+    return Object.entries(buckets)
+      .filter(([, v]) => v.amount > 0)
+      .map(([categoryId, v]) => ({
+        categoryId: categoryId || null,
+        ...v,
+        percentOfSpent: spentThisMonth > 0 ? (v.amount / spentThisMonth) * 100 : 0,
+      }));
+  })();
+
   const progressPercent = monthlySalary > 0 ? Math.min(100, (spentThisMonth / monthlySalary) * 100) : 0;
 
   const monthName = new Date(year, month, 1).toLocaleString('en-US', { month: 'long' });
@@ -390,14 +476,43 @@ function Calendar() {
 
       <div className="calendar-progress-wrap">
         <div className="calendar-progress">
-          <div
-            className="calendar-progress__value calendar-progress__value--spent"
-            style={{ width: `${progressPercent}%` }}
-          />
+          {spentThisMonth > 0 && spentByCategorySegments.length > 0 ? (
+            <div className="calendar-progress__filled" style={{ width: `${progressPercent}%` }}>
+              {spentByCategorySegments.map((seg) => (
+                <div
+                  key={seg.categoryId || 'uncategorized'}
+                  className="calendar-progress__value calendar-progress__value--spent"
+                  style={{
+                    flex: seg.amount / spentThisMonth,
+                    backgroundColor: seg.color,
+                    boxShadow: `0 4px 20px -4px ${seg.color}`,
+                  }}
+                  title={`${seg.name}: $${seg.amount.toFixed(0)}`}
+                />
+              ))}
+            </div>
+          ) : (
+            <div
+              className="calendar-progress__value calendar-progress__value--spent"
+              style={{ width: `${progressPercent}%` }}
+            />
+          )}
         </div>
         <p className="calendar-progress__label">
           Spent: ${spentThisMonth.toFixed(0)} / ${monthlySalary.toFixed(0)} ({progressPercent.toFixed(0)}%)
         </p>
+        {spentThisMonth > 0 && spentByCategorySegments.length > 0 && (
+          <ul className="calendar-progress__by-category">
+            {spentByCategorySegments.map((seg) => (
+              <li key={seg.categoryId || 'uncategorized'} className="calendar-progress__category-row">
+                <span className="calendar-progress__category-dot" style={{ backgroundColor: seg.color }} />
+                <span className="calendar-progress__category-name">{seg.name}</span>
+                <span className="calendar-progress__category-amount">${seg.amount.toFixed(0)}</span>
+                <span className="calendar-progress__category-pct">({seg.percentOfSpent.toFixed(0)}%)</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="calendar-progress-wrap">
@@ -486,7 +601,7 @@ function Calendar() {
       {selectedDay != null && (
         <div
           className="calendar-modal-overlay"
-          onClick={() => setSelectedDay(null)}
+          onClick={() => { setSelectedDay(null); setShowNewCategoryPopup(false); }}
           role="dialog"
           aria-modal="true"
           aria-label="Day details"
@@ -502,7 +617,7 @@ function Calendar() {
               <button
                 type="button"
                 className="calendar-modal__close"
-                onClick={() => setSelectedDay(null)}
+                onClick={() => { setSelectedDay(null); setShowNewCategoryPopup(false); }}
               >
                 ×
               </button>
@@ -540,9 +655,18 @@ function Calendar() {
                   )}
                 </div>
                 <ul className="calendar-modal__list">
-                  {selectedEntries.map((entry) => (
-                    <li key={entry.id} className={`calendar-modal__item calendar-modal__item--${entry.type} ${isSelectedDayFuture ? 'calendar-modal__item--scheduled' : ''}`}>
+                  {selectedEntries.map((entry) => {
+                    const cat = getCategoryById(entry.categoryId);
+                    const defaultBorder = entry.type === 'remove' ? 'var(--red)' : 'var(--primary)';
+                    const borderColor = cat ? cat.color : defaultBorder;
+                    return (
+                    <li
+                      key={entry.id}
+                      className={`calendar-modal__item calendar-modal__item--${entry.type} ${isSelectedDayFuture ? 'calendar-modal__item--scheduled' : ''}`}
+                      style={{ borderLeftColor: borderColor }}
+                    >
                       <span className="calendar-modal__item-text">
+                        {cat && <span className="calendar-modal__item-cat" style={{ color: cat.color }}>[{cat.name}] </span>}
                         {entry.name}: {entry.type === 'remove' ? '-' : '+'}${entry.amount}
                       </span>
                       <button
@@ -553,7 +677,8 @@ function Calendar() {
                         Delete
                       </button>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
                 <div className="calendar-modal__section">
                   <h3 className="calendar-modal__section-title calendar-modal__section-title--add">Add to card</h3>
@@ -610,9 +735,20 @@ function Calendar() {
               <div className="calendar-modal__saved">
                 <p className="calendar-modal__saved-intro">Add from saved items to this day (e.g. gym $100/month).</p>
                 <ul className="calendar-modal__saved-list">
-                  {savedItems.map((item) => (
-                    <li key={item.id} className={`calendar-modal__saved-item calendar-modal__saved-item--${item.type}`}>
-                      <span className="calendar-modal__saved-item-text">{item.name}: ${item.amount}</span>
+                  {savedItems.map((item) => {
+                    const cat = getCategoryById(item.categoryId);
+                    const defaultBorder = item.type === 'remove' ? 'var(--red)' : 'var(--primary)';
+                    const borderColor = cat ? cat.color : defaultBorder;
+                    return (
+                    <li
+                      key={item.id}
+                      className={`calendar-modal__saved-item calendar-modal__saved-item--${item.type}`}
+                      style={{ borderLeftColor: borderColor }}
+                    >
+                      <span className="calendar-modal__saved-item-text">
+                        {cat && <span className="calendar-modal__item-cat" style={{ color: cat.color }}>[{cat.name}] </span>}
+                        {item.name}: ${item.amount}
+                      </span>
                       <div className="calendar-modal__saved-item-actions">
                         <button type="button" className="calendar-modal__btn calendar-modal__btn--add calendar-modal__btn--small" onClick={() => addSavedToDay(item)}>
                           Add to this day
@@ -620,7 +756,8 @@ function Calendar() {
                         <button type="button" className="calendar-modal__item-delete" onClick={() => removeSavedItem(item.id)}>Remove</button>
                       </div>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
                 <form className="calendar-modal__saved-form" onSubmit={saveNewSavedItem}>
                   <h3 className="calendar-modal__section-title">New saved item</h3>
@@ -647,8 +784,80 @@ function Calendar() {
                       <option value="remove">Remove from card</option>
                     </select>
                   </label>
+                  <label className="calendar-modal__saved-type">
+                    <span>Категория:</span>
+                    <select value={newSavedCategoryId} onChange={(e) => setNewSavedCategoryId(e.target.value)}>
+                      <option value="">Некатегоризирани</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <button type="button" className="calendar-modal__btn calendar-modal__btn--small calendar-modal__btn--outline" onClick={() => setShowNewCategoryPopup(true)}>
+                      Нова категория
+                    </button>
+                  </label>
                   <button type="submit" className="calendar-modal__btn calendar-modal__btn--add">Save item</button>
                 </form>
+              </div>
+            )}
+
+            {showNewCategoryPopup && (
+              <div className="calendar-category-popup-overlay" onClick={() => setShowNewCategoryPopup(false)}>
+                <div className="calendar-category-popup" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="calendar-category-popup__title">Нова категория</h3>
+                  <form className="calendar-category-popup__form" onSubmit={(e) => { if (addCategory(e)) setShowNewCategoryPopup(false); }}>
+                    <label className="calendar-category-popup__label">
+                      <span>Име</span>
+                      <input
+                        type="text"
+                        placeholder="напр. Храна, Наем"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        className="calendar-category-popup__input"
+                        autoFocus
+                      />
+                    </label>
+                    <label className="calendar-category-popup__label">
+                      <span>Цвят</span>
+                      <div className="calendar-color-picker">
+                        {DEFAULT_CATEGORY_COLORS.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            className={`calendar-color-picker__swatch ${newCategoryColor === color ? 'calendar-color-picker__swatch--selected' : ''}`}
+                            style={{ backgroundColor: color }}
+                            onClick={() => setNewCategoryColor(color)}
+                            title={color}
+                          />
+                        ))}
+                        {!DEFAULT_CATEGORY_COLORS.includes(newCategoryColor) && (
+                          <span
+                            className="calendar-color-picker__swatch calendar-color-picker__swatch--selected"
+                            style={{ backgroundColor: newCategoryColor }}
+                            title="Избран цвят"
+                          />
+                        )}
+                        <label className="calendar-color-picker__custom">
+                          <span className="calendar-color-picker__custom-label">Друг</span>
+                          <input
+                            type="color"
+                            value={newCategoryColor}
+                            onChange={(e) => setNewCategoryColor(e.target.value)}
+                            className="calendar-color-picker__custom-input"
+                          />
+                        </label>
+                      </div>
+                    </label>
+                    <div className="calendar-category-popup__actions">
+                      <button type="submit" className="calendar-modal__btn calendar-modal__btn--add">
+                        Създай
+                      </button>
+                      <button type="button" className="calendar-modal__btn calendar-modal__btn--outline" onClick={() => setShowNewCategoryPopup(false)}>
+                        Отказ
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             )}
           </div>
