@@ -15,8 +15,18 @@
   color: #fff;
 }
 
-.calendar-top-row {
+.calendar-summary-row {
   margin-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.calendar-summary-left {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .calendar-salary {
@@ -42,6 +52,36 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.calendar-salary__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-salary__add-btn {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+  color: #0f1115;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(46, 204, 113, 0.45);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+
+.calendar-salary__add-btn:hover:enabled {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(46, 204, 113, 0.55);
+}
+
+.calendar-salary__add-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
 }
 
 .calendar-salary__main {
@@ -184,6 +224,137 @@
 .calendar-progress__category-pct {
   color: rgba(255, 255, 255, 0.5);
   font-size: 12px;
+}
+
+.calendar-chart-card {
+  margin-bottom: 24px;
+  width: 100%;
+  max-width: 560px;
+  padding: 16px 18px 18px;
+  border-radius: 18px;
+  background: radial-gradient(circle at top left, #171c25 0%, #10131a 55%, #0b0d12 100%);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.calendar-chart-card--widget {
+  max-width: 100%;
+  margin-bottom: 0;
+}
+
+.calendar-chart-card--compact .calendar-chart__svg {
+  height: 120px;
+}
+
+.calendar-chart-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.calendar-chart-card__label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.calendar-chart-card__value {
+  margin-top: 4px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.calendar-chart-card__sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.calendar-chart-card__range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.calendar-chart-card__range-btn {
+  border: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.calendar-chart-card__range-btn--active {
+  background: var(--primary);
+  color: #0f1115;
+}
+
+.calendar-chart-card__range-btn:hover:not(.calendar-chart-card__range-btn--active) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.calendar-chart {
+  position: relative;
+  margin-top: 4px;
+}
+
+.calendar-chart__svg {
+  width: 100%;
+  height: 160px;
+  display: block;
+  overflow: visible;
+}
+
+.calendar-chart__area {
+  opacity: 1;
+}
+
+.calendar-chart__line {
+  stroke-width: 1.1;
+  filter: drop-shadow(0 0 6px rgba(77, 210, 255, 0.6));
+  stroke-linecap: round;
+}
+
+.calendar-chart__dot {
+  stroke: #1b9fff;
+  stroke-width: 0.5;
+}
+
+.calendar-chart__cursor-line {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 0.4;
+  stroke-dasharray: 1.5 1.5;
+}
+
+.calendar-chart__axis {
+  position: relative;
+  margin-top: 6px;
+  height: 1.2em;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.calendar-chart__axis--invisible {
+  height: 0;
+  margin-top: 0;
+  overflow: hidden;
+}
+
+.calendar-chart__axis-tick {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .calendar-modal__item-cat {

@@ -39,10 +39,9 @@ function Calendar() {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [month, setMonth] = useState(() => new Date().getMonth());
   const [monthlySalary, setMonthlySalary] = useState(0);
-  const [salaryPayDay, setSalaryPayDay] = useState(null);
   const [salaryEditing, setSalaryEditing] = useState(true);
   const [salaryInput, setSalaryInput] = useState('');
-  const [payDayInput, setPayDayInput] = useState('');
+  const [salaryPayDay, setSalaryPayDay] = useState(null);
   const [cardBalance, setCardBalance] = useState(0);
   const [lastSalaryAdd, setLastSalaryAdd] = useState(null);
   const [entries, setEntries] = useState({});
@@ -92,13 +91,7 @@ function Calendar() {
         setSavedItems(data.savedItems ?? []);
         setCategories(data.categories ?? []);
         let last = data.lastSalaryAdd ?? null;
-        const payDay = data.salaryPayDay ?? null;
-        const salary = data.monthlySalary ?? 0;
         let balance = initialBalance;
-        if (payDay != null && salary > 0 && last !== currentYM && now.getDate() >= payDay) {
-          balance += salary;
-          last = currentYM;
-        }
         const allEntries = data.entries ?? {};
         Object.keys(allEntries).forEach((dk) => {
           if (dk > todayK) return;
@@ -110,22 +103,8 @@ function Calendar() {
         });
         setCardBalance(balance);
         setLastSalaryAdd(last);
-        if (last !== (data.lastSalaryAdd ?? null)) {
-          try {
-            localStorage.setItem(key, JSON.stringify({
-              ...data,
-              cardBalance: balance,
-              lastSalaryAdd: last,
-              savedItems: data.savedItems ?? [],
-              categories: data.categories ?? [],
-            }));
-          } catch (e) {
-            console.warn('Calendar save failed', e);
-          }
-        }
         setSalaryEditing(false);
         setSalaryInput('');
-        setPayDayInput('');
       } else {
         setMonthlySalary(0);
         setSalaryPayDay(null);
@@ -162,17 +141,34 @@ function Calendar() {
 
   const handleSalarySave = () => {
     const num = Number(salaryInput) || 0;
-    const day = payDayInput === '' || payDayInput === 'no' ? null : Math.min(31, Math.max(1, parseInt(payDayInput, 10) || null));
     setMonthlySalary(num);
-    setSalaryPayDay(day);
     setSalaryEditing(false);
     setSalaryInput('');
-    setPayDayInput('');
     saveData({
       monthlySalary: num,
-      salaryPayDay: day,
+      salaryPayDay,
       cardBalance,
       lastSalaryAdd,
+      entries,
+      savedItems,
+      categories,
+    });
+  };
+
+  const handleAddSalaryNow = () => {
+    if (!monthlySalary || monthlySalary <= 0) return;
+    const now = new Date();
+    const dateKey = toDateKey(now);
+    const currentYM = yearMonthStr(now);
+    if (lastSalaryAdd === currentYM) return;
+    addEntry(dateKey, 'Salary', monthlySalary, 'add');
+    const nextLast = currentYM;
+    setLastSalaryAdd(nextLast);
+    saveData({
+      monthlySalary,
+      salaryPayDay,
+      cardBalance,
+      lastSalaryAdd: nextLast,
       entries,
       savedItems,
       categories,
@@ -182,7 +178,6 @@ function Calendar() {
   const startSalaryEdit = () => {
     setSalaryEditing(true);
     setSalaryInput(monthlySalary > 0 ? String(monthlySalary) : '');
-    setPayDayInput(salaryPayDay != null ? String(salaryPayDay) : '');
   };
 
   const firstDay = new Date(year, month, 1).getDay();
@@ -208,6 +203,7 @@ function Calendar() {
       amount: amt,
       type: type || 'add',
       categoryId: categoryId || undefined,
+      createdAt: Date.now(),
     };
     const next = { ...entries, [dateKey]: [...list, entry] };
     const isFuture = isDateKeyFuture(dateKey);
@@ -414,12 +410,201 @@ function Calendar() {
 
   const cardBarPercent = monthlySalary > 0 ? Math.min(100, (cardBalance / monthlySalary) * 100) : (cardBalance > 0 ? 100 : 0);
 
+  const [chartRange, setChartRange] = useState('1m');
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+
+  const getBalanceAtEndOfDay = useCallback(
+    (dateKey) => {
+      let balance = initialBalance;
+      const sortedKeys = Object.keys(entries).sort();
+      sortedKeys.forEach((dk) => {
+        if (dk > dateKey) return;
+        const dayEntries = (entries[dk] || []).slice().sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+        dayEntries.forEach((e) => {
+          const t = e.type || 'add';
+          if (t === 'remove') balance -= e.amount;
+          else balance += e.amount;
+        });
+      });
+      return balance;
+    },
+    [entries, initialBalance]
+  );
+
+  const getBalanceAtStartOfDay = useCallback(
+    (dateKey) => {
+      const d = new Date(dateKey);
+      d.setDate(d.getDate() - 1);
+      const prevKey = toDateKey(d);
+      return getBalanceAtEndOfDay(prevKey);
+    },
+    [getBalanceAtEndOfDay]
+  );
+
+  const buildBalanceTimeline = useCallback(
+    (daysBack) => {
+      const timeline = [];
+      const base = new Date();
+      for (let i = daysBack; i >= 0; i--) {
+        const d = new Date(base);
+        d.setDate(d.getDate() - i);
+        const dateKey = toDateKey(d);
+        timeline.push({ date: d, balance: getBalanceAtEndOfDay(dateKey) });
+      }
+      return timeline;
+    },
+    [getBalanceAtEndOfDay]
+  );
+
+  const buildBalanceTimelineFromEvents = useCallback(
+    (daysBack) => {
+      const points = [];
+      const base = new Date();
+      for (let i = daysBack; i >= 0; i--) {
+        const d = new Date(base);
+        d.setDate(d.getDate() - i);
+        const dateKey = toDateKey(d);
+        let balance = getBalanceAtStartOfDay(dateKey);
+        const startOfDay = new Date(d);
+        startOfDay.setHours(0, 0, 0, 0);
+        points.push({ date: startOfDay, balance });
+        const dayEntries = (entries[dateKey] || []).slice().sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+        for (const e of dayEntries) {
+          const entryTime = e.createdAt != null ? new Date(e.createdAt) : new Date(d);
+          const pointDate = new Date(d);
+          pointDate.setHours(entryTime.getHours(), entryTime.getMinutes(), entryTime.getSeconds(), 0);
+          balance += (e.type === 'remove' ? -e.amount : e.amount);
+          points.push({ date: pointDate, balance });
+        }
+      }
+      points.push({ date: new Date(), balance: cardBalance });
+      points.sort((a, b) => a.date.getTime() - b.date.getTime());
+      points[points.length - 1] = { date: new Date(), balance: cardBalance };
+      return points;
+    },
+    [getBalanceAtStartOfDay, entries, cardBalance]
+  );
+
+  const buildBalanceTimelineHours = useCallback(
+    (totalHours, stepHours) => {
+      const timeline = [];
+      const base = new Date();
+      base.setMinutes(0, 0, 0);
+      const start = new Date(base.getTime() - totalHours * 60 * 60 * 1000);
+      const steps = Math.floor((totalHours * 60 * 60) / (stepHours * 60 * 60));
+      for (let i = 0; i <= steps; i++) {
+        const t = new Date(start.getTime() + i * stepHours * 60 * 60 * 1000);
+        const isLast = i === steps;
+        const balance = isLast
+          ? cardBalance
+          : getBalanceAtEndOfDay(toDateKey(new Date(t.getTime() - 24 * 60 * 60 * 1000)));
+        timeline.push({ date: isLast ? new Date() : t, balance });
+      }
+      return timeline;
+    },
+    [getBalanceAtEndOfDay, cardBalance]
+  );
+
+  const getTimelineForRange = () => {
+    switch (chartRange) {
+      case '1w':
+        return buildBalanceTimelineFromEvents(7);
+      case '6m':
+        return buildBalanceTimelineFromEvents(180);
+      case '1y':
+        return buildBalanceTimelineFromEvents(365);
+      case '1m':
+      default:
+        return buildBalanceTimelineFromEvents(30);
+    }
+  };
+
+  const balanceTimeline = getTimelineForRange();
+
+  const rawMaxBalance = balanceTimeline.length
+    ? Math.max(...balanceTimeline.map((p) => p.balance))
+    : 0;
+  const minBalance = balanceTimeline.length
+    ? Math.min(...balanceTimeline.map((p) => p.balance))
+    : 0;
+
+  const maxBalance =
+    rawMaxBalance === minBalance
+      ? rawMaxBalance || 0
+      : rawMaxBalance + Math.abs(rawMaxBalance - minBalance) * 0.3;
+
+  const normalizedPoints = balanceTimeline.map((p, idx) => {
+    const x = (idx / Math.max(1, balanceTimeline.length - 1)) * 100;
+    const range = maxBalance - minBalance || 1;
+    const rawY = 100 - ((p.balance - minBalance) / range) * 100;
+    const y = 10 + (rawY / 100) * 80; // clamp between 10% and 90%
+    return { x, y, date: p.date, balance: p.balance };
+  });
+
+  const buildSmoothPath = (points, height) => {
+    if (!points.length) return '';
+    if (points.length === 1) {
+      const py = (points[0].y / 100) * height;
+      return `M ${points[0].x} ${py}`;
+    }
+    const toY = (p) => (p.y / 100) * height;
+    let d = `M ${points[0].x} ${toY(points[0])}`;
+    for (let i = 1; i < points.length; i++) {
+      const p0 = points[i - 1];
+      const p1 = points[i];
+      const pPrev = points[i - 2] || p0;
+      const pNext = points[i + 1] || p1;
+      const smoothing = 0.2;
+      const cp1x = p0.x + (p1.x - pPrev.x) * smoothing;
+      const cp1y = toY(p0) + (toY(p1) - toY(pPrev)) * smoothing;
+      const cp2x = p1.x - (pNext.x - p0.x) * smoothing;
+      const cp2y = toY(p1) - (toY(pNext) - toY(p0)) * smoothing;
+      d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p1.x} ${toY(p1)}`;
+    }
+    return d;
+  };
+
+  const linePathD = buildSmoothPath(normalizedPoints, 36);
+  const areaPathD = linePathD && normalizedPoints.length > 0
+    ? `${linePathD} L ${normalizedPoints[normalizedPoints.length - 1].x} 36 L ${normalizedPoints[0].x} 36 Z`
+    : '';
+
+  const chartAxisLabels = [];
+
+  const activePoint =
+    normalizedPoints.length === 0
+      ? null
+      : hoveredIndex != null && normalizedPoints[hoveredIndex]
+        ? normalizedPoints[hoveredIndex]
+        : normalizedPoints[normalizedPoints.length - 1];
+
+  const handleChartMove = (event) => {
+    if (!normalizedPoints.length) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const relative = ((event.clientX - rect.left) / rect.width) * 100;
+    let nearestIndex = 0;
+    let nearestDist = Infinity;
+    normalizedPoints.forEach((p, idx) => {
+      const dist = Math.abs(p.x - relative);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestIndex = idx;
+      }
+    });
+    setHoveredIndex(nearestIndex);
+  };
+
+  const handleChartLeave = () => {
+    setHoveredIndex(null);
+  };
+
   return (
     <div className="calendar-page">
       <h1 className="calendar-page__title">Calendar</h1>
 
-      <div className="calendar-top-row">
-        <div className="calendar-salary">
+      <div className="calendar-summary-row">
+        <div className="calendar-summary-left">
+          <div className="calendar-salary">
           {salaryEditing ? (
             <div className="calendar-salary__edit">
               <label className="calendar-salary__label">
@@ -431,15 +616,6 @@ function Calendar() {
                   value={salaryInput}
                   onChange={(e) => setSalaryInput(e.target.value)}
                   placeholder="e.g. 3000"
-                />
-              </label>
-              <label className="calendar-salary__label">
-                <span>Pay day (1–31, or leave empty for no salary)</span>
-                <input
-                  type="text"
-                  value={payDayInput}
-                  onChange={(e) => setPayDayInput(e.target.value)}
-                  placeholder="e.g. 25 or empty"
                 />
               </label>
               <button
@@ -458,73 +634,182 @@ function Calendar() {
                   Monthly salary: ${monthlySalary.toLocaleString()}
                 </span>
                 <span className="calendar-salary__sub">
-                  {salaryPayDay != null ? `Pay day: ${salaryPayDay}` : 'No salary'}
+                  {salaryPayDay != null ? `Pay day: ${salaryPayDay}` : 'No salary day set'}
                 </span>
               </div>
-              <button
-                type="button"
-                className="calendar-salary__svg-btn"
-                onClick={startSalaryEdit}
-                title="Edit"
-              >
-                <SalaryEditIcon />
-              </button>
+              <div className="calendar-salary__actions">
+                <button
+                  type="button"
+                  className="calendar-salary__svg-btn"
+                  onClick={startSalaryEdit}
+                  title="Edit"
+                >
+                  <SalaryEditIcon />
+                </button>
+                <button
+                  type="button"
+                  className="calendar-salary__add-btn"
+                  onClick={handleAddSalaryNow}
+                  disabled={!monthlySalary}
+                >
+                  Add salary
+                </button>
+              </div>
             </div>
           )}
-        </div>
-      </div>
-
-      <div className="calendar-progress-wrap">
-        <div className="calendar-progress">
-          {spentThisMonth > 0 && spentByCategorySegments.length > 0 ? (
-            <div className="calendar-progress__filled" style={{ width: `${progressPercent}%` }}>
-              {spentByCategorySegments.map((seg) => (
+          </div>
+          <div className="calendar-progress-wrap">
+            <div className="calendar-progress">
+              {spentThisMonth > 0 && spentByCategorySegments.length > 0 ? (
+                <div className="calendar-progress__filled" style={{ width: `${progressPercent}%` }}>
+                  {spentByCategorySegments.map((seg) => (
+                    <div
+                      key={seg.categoryId || 'uncategorized'}
+                      className="calendar-progress__value--spent"
+                      style={{
+                        flex: seg.amount / spentThisMonth,
+                        background: seg.color,
+                        boxShadow: `0 4px 20px -4px ${seg.color}`,
+                      }}
+                      title={`${seg.name}: $${seg.amount.toFixed(0)}`}
+                    />
+                  ))}
+                </div>
+              ) : (
                 <div
-                  key={seg.categoryId || 'uncategorized'}
                   className="calendar-progress__value calendar-progress__value--spent"
-                  style={{
-                    flex: seg.amount / spentThisMonth,
-                    backgroundColor: seg.color,
-                    boxShadow: `0 4px 20px -4px ${seg.color}`,
-                  }}
-                  title={`${seg.name}: $${seg.amount.toFixed(0)}`}
+                  style={{ width: `${progressPercent}%` }}
                 />
+              )}
+            </div>
+            <p className="calendar-progress__label">
+              Spent: ${spentThisMonth.toFixed(0)} / ${monthlySalary.toFixed(0)} ({progressPercent.toFixed(0)}%)
+            </p>
+            {spentThisMonth > 0 && spentByCategorySegments.length > 0 && (
+              <ul className="calendar-progress__by-category">
+                {spentByCategorySegments.map((seg) => (
+                  <li key={seg.categoryId || 'uncategorized'} className="calendar-progress__category-row">
+                    <span className="calendar-progress__category-dot" style={{ backgroundColor: seg.color }} />
+                    <span className="calendar-progress__category-name">{seg.name}</span>
+                    <span className="calendar-progress__category-amount">${seg.amount.toFixed(0)}</span>
+                    <span className="calendar-progress__category-pct">({seg.percentOfSpent.toFixed(0)}%)</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+        <div className="calendar-chart-card">
+          <div className="calendar-chart-card__header">
+            <div>
+              <div className="calendar-chart-card__label">Wallet value</div>
+              <div className="calendar-chart-card__value">
+                ${activePoint ? activePoint.balance.toFixed(2) : cardBalance.toFixed(2)}
+              </div>
+              {activePoint && (
+                <div className="calendar-chart-card__sub">
+                  {activePoint.date.toLocaleDateString('en-GB', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
+                  {chartRange === '1w' && (
+                    <span className="calendar-chart-card__sub-time">
+                      {' · '}
+                      {activePoint.date.toLocaleTimeString('en-GB', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false,
+                      })}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="calendar-chart-card__range">
+              {[
+                { id: '1w', label: '1w' },
+                { id: '1m', label: '1m' },
+                { id: '6m', label: '6m' },
+                { id: '1y', label: '1y' },
+              ].map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  className={`calendar-chart-card__range-btn ${
+                    chartRange === r.id ? 'calendar-chart-card__range-btn--active' : ''
+                  }`}
+                  onClick={() => setChartRange(r.id)}
+                >
+                  {r.label}
+                </button>
               ))}
             </div>
-          ) : (
-            <div
-              className="calendar-progress__value calendar-progress__value--spent"
-              style={{ width: `${progressPercent}%` }}
-            />
-          )}
+          </div>
+          <div className="calendar-chart">
+            <svg
+              viewBox="0 0 100 36"
+              preserveAspectRatio="none"
+              className="calendar-chart__svg"
+              onMouseMove={handleChartMove}
+              onMouseLeave={handleChartLeave}
+            >
+              <defs>
+                <linearGradient id="calendarChartLine" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="var(--primary)" />
+                  <stop offset="100%" stopColor="var(--primary-hover)" />
+                </linearGradient>
+                <linearGradient id="calendarChartFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgba(46, 204, 113, 0.3)" />
+                  <stop offset="100%" stopColor="rgba(46, 204, 113, 0)" />
+                </linearGradient>
+              </defs>
+              {normalizedPoints.length > 0 && (
+                <>
+                  <path
+                    className="calendar-chart__area"
+                    d={areaPathD}
+                    fill="url(#calendarChartFill)"
+                  />
+                  <path
+                    className="calendar-chart__line"
+                    d={linePathD}
+                    stroke="url(#calendarChartLine)"
+                    fill="none"
+                  />
+                  {activePoint && (
+                    <>
+                      <line
+                        className="calendar-chart__cursor-line"
+                        x1={activePoint.x}
+                        y1="0"
+                        x2={activePoint.x}
+                        y2="36"
+                      />
+                      <circle
+                        className="calendar-chart__dot"
+                        cx={activePoint.x}
+                        cy={(activePoint.y / 100) * 35.5}
+                        r="0.8"
+                      />
+                    </>
+                  )}
+                </>
+              )}
+            </svg>
+            <div className={`calendar-chart__axis ${chartAxisLabels.length === 0 ? 'calendar-chart__axis--invisible' : ''}`}>
+              {chartAxisLabels.map((item, idx) => (
+                <span
+                  key={idx}
+                  className="calendar-chart__axis-tick"
+                  style={{ left: `${item.x}%` }}
+                >
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
-        <p className="calendar-progress__label">
-          Spent: ${spentThisMonth.toFixed(0)} / ${monthlySalary.toFixed(0)} ({progressPercent.toFixed(0)}%)
-        </p>
-        {spentThisMonth > 0 && spentByCategorySegments.length > 0 && (
-          <ul className="calendar-progress__by-category">
-            {spentByCategorySegments.map((seg) => (
-              <li key={seg.categoryId || 'uncategorized'} className="calendar-progress__category-row">
-                <span className="calendar-progress__category-dot" style={{ backgroundColor: seg.color }} />
-                <span className="calendar-progress__category-name">{seg.name}</span>
-                <span className="calendar-progress__category-amount">${seg.amount.toFixed(0)}</span>
-                <span className="calendar-progress__category-pct">({seg.percentOfSpent.toFixed(0)}%)</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="calendar-progress-wrap">
-        <div className="calendar-progress">
-          <div
-            className="calendar-progress__value calendar-progress__value--card"
-            style={{ width: `${cardBarPercent}%` }}
-          />
-        </div>
-        <p className="calendar-progress__label">
-          Card balance: ${cardBalance.toFixed(2)}
-        </p>
       </div>
 
       <div className="calendar-nav">
